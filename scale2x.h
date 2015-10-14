@@ -29,6 +29,13 @@ typedef unsigned scale2x_uint32;
 #endif
 
 /**
+ * Enable the ALTIVEC implementation.
+ */
+#if defined(__ALTIVEC__)
+#define USE_SCALE2X_ALTIVEC 1
+#endif
+
+/**
  * Memory alignment required.
  */
 #ifdef USE_SCALE2X_SSE2
@@ -100,6 +107,10 @@ void scale2x3_32_sse2(scale2x_uint32* dst0, scale2x_uint32* dst1, scale2x_uint32
 void scale2x4_8_sse2(scale2x_uint8* dst0, scale2x_uint8* dst1, scale2x_uint8* dst2, scale2x_uint8* dst3, const scale2x_uint8* src0, const scale2x_uint8* src1, const scale2x_uint8* src2, unsigned count);
 void scale2x4_16_sse2(scale2x_uint16* dst0, scale2x_uint16* dst1, scale2x_uint16* dst2, scale2x_uint16* dst3, const scale2x_uint16* src0, const scale2x_uint16* src1, const scale2x_uint16* src2, unsigned count);
 void scale2x4_32_sse2(scale2x_uint32* dst0, scale2x_uint32* dst1, scale2x_uint32* dst2, scale2x_uint32* dst3, const scale2x_uint32* src0, const scale2x_uint32* src1, const scale2x_uint32* src2, unsigned count);
+#endif
+
+#if defined(USE_SCALE2X_ALTIVEC)
+void scale2x_8_altivec(scale2x_uint8* dst0, scale2x_uint8* dst1, const scale2x_uint8* src0, const scale2x_uint8* src1, const scale2x_uint8* src2, unsigned count);
 #endif
 
 #endif
