@@ -26,6 +26,10 @@
 #include <config.h>
 #endif
 
+#ifdef __ALTIVEC__
+#include <altivec.h>
+#endif
+
 #include "scale2x.h"
 
 #include <assert.h>
@@ -1458,3 +1462,109 @@ void scale2x4_32_mmx(scale2x_uint32* dst0, scale2x_uint32* dst1, scale2x_uint32*
 
 #endif
 
+#ifdef __ALTIVEC__
+/*
+ * e1 = B if (B != H && D != F) && B == D
+ * e2 = B if (B != H && D != F) && B == F
+ */
+static inline void scale2x_8_altivec_border(scale2x_uint8* dst, const scale2x_uint8* src0, const scale2x_uint8* src1, const scale2x_uint8* src2, unsigned count)
+{
+	vector unsigned char B, D, E, F, H, e1, e2;
+	vector __bool char BDeq, BFeq, BHeq, DFeq;
+
+	assert(count >= 32);
+	assert(count % 16 == 0);
+
+	/* first run */
+	B = *((vector unsigned char *)src0);
+	E = *((vector unsigned char *)src1);
+	H = *((vector unsigned char *)src2);
+	/* TODO : use vec_perm() to "shift" */
+	D = E;
+	F = E;
+	src0 += 16;
+	src1 += 16;
+	src2 += 16;
+
+	BDeq = vec_cmpeq(B, D);
+	BFeq = vec_cmpeq(B, F);
+	BHeq = vec_cmpeq(B, H);
+	DFeq = vec_cmpeq(D, F);
+
+	e1 = vec_sel(B, E, vec_andc(vec_andc(BDeq, BHeq), DFeq));
+	e2 = vec_sel(B, E, vec_andc(vec_andc(BFeq, BHeq), DFeq));
+
+	*((vector unsigned char *)dst) = vec_mergeh(e1, e2);
+	dst += 16;
+	*((vector unsigned char *)dst) = vec_mergel(e1, e2);
+	dst += 16;
+
+	/* middle */
+	for (count -= 32; count > 0; count -= 16) {
+		B = *((vector unsigned char *)src0);
+		E = *((vector unsigned char *)src1);
+		H = *((vector unsigned char *)src2);
+		D = E;
+		F = E;
+		src0 += 16;
+		src1 += 16;
+		src2 += 16;
+
+		e1 = E;
+		e2 = E;
+
+		*((vector unsigned char *)dst) = vec_mergeh(e1, e2);
+		dst += 16;
+		*((vector unsigned char *)dst) = vec_mergel(e1, e2);
+		dst += 16;
+	}
+
+	/* last run */
+	B = *((vector unsigned char *)src0);
+	E = *((vector unsigned char *)src1);
+	H = *((vector unsigned char *)src2);
+	D = E;
+	F = E;
+	src0 += 16;
+	src1 += 16;
+	src2 += 16;
+
+	e1 = E;
+	e2 = E;
+
+	*((vector unsigned char *)dst) = vec_mergeh(e1, e2);
+	dst += 16;
+	*((vector unsigned char *)dst) = vec_mergel(e1, e2);
+	dst += 16;
+}
+
+/**
+ * Scale by a factor of 2 a row of pixels of 8 bits.
+ * This is a very fast Altivec implementation.
+ * The implementation uses a combination of cmp/and/not operations to
+ * completly remove the need of conditional jumps. This trick give the
+ * major speed improvement.
+ * Also, using the 16 bytes Altivec registers more than one pixel are computed
+ * at the same time.
+ * The pixels over the left and right borders are assumed of the same color of
+ * the pixels on the border.
+ * Note that the implementation is optimized to write data sequentially to
+ * maximize the bandwidth on video memory.
+ * \param src0 Pointer at the first pixel of the previous row.
+ * \param src1 Pointer at the first pixel of the current row.
+ * \param src2 Pointer at the first pixel of the next row.
+ * \param count Length in pixels of the src0, src1 and src2 rows.
+ * \param dst0 First destination row, double length in pixels.
+ * \param dst1 Second destination row, double length in pixels.
+ */
+void scale2x_8_altivec(scale2x_uint8* dst0, scale2x_uint8* dst1, const scale2x_uint8* src0, const scale2x_uint8* src1, const scale2x_uint8* src2, unsigned count)
+{
+	if (count % 16 != 0 || count < 32) {
+		scale2x_8_def(dst0, dst1, src0, src1, src2, count);
+	} else {
+		scale2x_8_altivec_border(dst0, src0, src1, src2, count);
+		scale2x_8_altivec_border(dst1, src2, src1, src0, count);
+	}
+}
+
+#endif /* __ALTIVEC__ */

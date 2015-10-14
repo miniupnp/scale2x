@@ -100,6 +100,8 @@ void usage(void) {
 	printf("Fast implementation of the Scale2/3/4x effects\n");
 #if defined(__GNUC__) && (defined(__i386__) || defined(__x86_64__))
 	printf("(using Pentium MMX optimization)\n");
+#elif defined(__ALTIVEC__)
+	printf("(using Altivec optimization)\n");
 #endif
 	printf("\nSyntax: scalex [-k N] FROM.png TO.png\n");
 	printf("\nOptions:\n");
