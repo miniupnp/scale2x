@@ -15,7 +15,7 @@
  */
 
 /*
- * This file contains a C and MMX implementation of the Scale2x effect.
+ * This file contains C, MMX and Altivec implementation of the Scale2x effect.
  *
  * You can find an high level description of the effect at :
  *
@@ -1476,13 +1476,15 @@ void scale2x4_32_mmx(scale2x_uint32* dst0, scale2x_uint32* dst1, scale2x_uint32*
 
 #ifdef __ALTIVEC__
 /*
- * e1 = B if (B != H && D != F) && B == D
- * e2 = B if (B != H && D != F) && B == F
+ * e1 = B if (B == D) && !(B == H) && !(D == F)
+ * e2 = B if (B == F) && !(B == H) && !(D == F)
  */
 static inline void scale2x_8_altivec_border(scale2x_uint8* dst, const scale2x_uint8* src0, const scale2x_uint8* src1, const scale2x_uint8* src2, unsigned count)
 {
 	vector unsigned char B, D, E, F, H, e1, e2;
 	vector __bool char BDeq, BFeq, BHeq, DFeq;
+	static const vector unsigned char perm_first = {0,0,1,2,3,4,5,6,7,8,9,10,11,12,13,14};
+	static const vector unsigned char perm_last = {1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,15};
 
 	assert(count >= 32);
 	assert(count % 16 == 0);
@@ -1491,9 +1493,8 @@ static inline void scale2x_8_altivec_border(scale2x_uint8* dst, const scale2x_ui
 	B = *((vector unsigned char *)src0);
 	E = *((vector unsigned char *)src1);
 	H = *((vector unsigned char *)src2);
-	/* TODO : use vec_perm() to "shift" */
-	D = E;
-	F = E;
+	D = vec_perm(E, E, perm_first);
+	F = vec_perm(E, *(((vector unsigned char *)src1)+1), vec_lvsl(1, src1));
 	src0 += 16;
 	src1 += 16;
 	src2 += 16;
@@ -1503,8 +1504,8 @@ static inline void scale2x_8_altivec_border(scale2x_uint8* dst, const scale2x_ui
 	BHeq = vec_cmpeq(B, H);
 	DFeq = vec_cmpeq(D, F);
 
-	e1 = vec_sel(B, E, vec_andc(vec_andc(BDeq, BHeq), DFeq));
-	e2 = vec_sel(B, E, vec_andc(vec_andc(BFeq, BHeq), DFeq));
+	e1 = vec_sel(E, B, vec_andc(vec_andc(BDeq, BHeq), DFeq));
+	e2 = vec_sel(E, B, vec_andc(vec_andc(BFeq, BHeq), DFeq));
 
 	*((vector unsigned char *)dst) = vec_mergeh(e1, e2);
 	dst += 16;
@@ -1516,14 +1517,19 @@ static inline void scale2x_8_altivec_border(scale2x_uint8* dst, const scale2x_ui
 		B = *((vector unsigned char *)src0);
 		E = *((vector unsigned char *)src1);
 		H = *((vector unsigned char *)src2);
-		D = E;
-		F = E;
+		D = vec_perm(*(((vector unsigned char *)src1)-1), E, vec_lvsl(15, src1));
+		F = vec_perm(E, *(((vector unsigned char *)src1)+1), vec_lvsl(1, src1));
 		src0 += 16;
 		src1 += 16;
 		src2 += 16;
 
-		e1 = E;
-		e2 = E;
+		BDeq = vec_cmpeq(B, D);
+		BFeq = vec_cmpeq(B, F);
+		BHeq = vec_cmpeq(B, H);
+		DFeq = vec_cmpeq(D, F);
+
+		e1 = vec_sel(E, B, vec_andc(vec_andc(BDeq, BHeq), DFeq));
+		e2 = vec_sel(E, B, vec_andc(vec_andc(BFeq, BHeq), DFeq));
 
 		*((vector unsigned char *)dst) = vec_mergeh(e1, e2);
 		dst += 16;
@@ -1535,14 +1541,19 @@ static inline void scale2x_8_altivec_border(scale2x_uint8* dst, const scale2x_ui
 	B = *((vector unsigned char *)src0);
 	E = *((vector unsigned char *)src1);
 	H = *((vector unsigned char *)src2);
-	D = E;
-	F = E;
+	D = vec_perm(*(((vector unsigned char *)src1)-1), E, vec_lvsl(15, src1));
+	F = vec_perm(E, E, perm_last);
 	src0 += 16;
 	src1 += 16;
 	src2 += 16;
 
-	e1 = E;
-	e2 = E;
+	BDeq = vec_cmpeq(B, D);
+	BFeq = vec_cmpeq(B, F);
+	BHeq = vec_cmpeq(B, H);
+	DFeq = vec_cmpeq(D, F);
+
+	e1 = vec_sel(E, B, vec_andc(vec_andc(BDeq, BHeq), DFeq));
+	e2 = vec_sel(E, B, vec_andc(vec_andc(BFeq, BHeq), DFeq));
 
 	*((vector unsigned char *)dst) = vec_mergeh(e1, e2);
 	dst += 16;
