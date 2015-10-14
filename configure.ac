@@ -14,9 +14,28 @@ AC_CHECK_PROG([WINE],[wine],[wine],[])
 
 # include macports directories
 AS_CASE([$host],
-	[*-apple-darwin*], [CFLAGS="$CFLAGS -isystem/opt/local/include"
-	LDFLAGS="$LDFLAGS -L/opt/local/lib"],
+	[*-apple-darwin*], [CFLAGS="$CFLAGS -isystem/opt/local/include"; LDFLAGS="$LDFLAGS -L/opt/local/lib"],
 )
+
+# check for altivec
+have_altivec_intrinsics=no
+AC_MSG_CHECKING(whether to use Altivec intrinsics)
+save_CFLAGS=$CFLAGS
+CFLAGS="$CFLAGS -maltivec"
+AC_COMPILE_IFELSE([AC_LANG_SOURCE([
+#if defined(__GNUC__) && (__GNUC__ < 3 || (__GNUC__ == 3 && __GNUC_MINOR__ < 4))
+error "Need GCC >= 3.4 for sane altivec support"
+#endif
+#include <altivec.h>
+int main () {
+    vector unsigned int v = vec_splat_u32 (1);
+    v = vec_sub (v, v);
+    return 0;
+}])], have_altivec_intrinsics=yes)
+if test $have_altivec_intrinsics = no; then
+	CFLAGS=$save_CFLAGS
+fi
+AC_MSG_RESULT($have_altivec_intrinsics)
 
 # Checks for libraries.
 AC_CHECK_LIB([m], [log], [], [AC_MSG_ERROR([the libm library is missing])])
