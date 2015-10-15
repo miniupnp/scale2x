@@ -30,6 +30,11 @@
 #include <altivec.h>
 #endif
 
+#ifdef __x86_64__
+/* Every x86_64 CPU supports SSE/SSE2 */
+#include <emmintrin.h>
+#endif
+
 #include "scale2x.h"
 
 #include <assert.h>
@@ -1591,3 +1596,125 @@ void scale2x_8_altivec(scale2x_uint8* dst0, scale2x_uint8* dst1, const scale2x_u
 }
 
 #endif /* __ALTIVEC__ */
+
+#if defined(__GNUC__) && defined(__x86_64__)
+/* SSE2 code */
+/* SEL(A, B, cond) = cond ? A : B; */
+#define SEL(A, B, cond) _mm_or_si128( _mm_and_si128((cond), (A)), \
+                                      _mm_andnot_si128((cond), (B)) )
+/*
+ * e1 = B if (B == D) && !(B == H) && !(D == F)
+ * e2 = B if (B == F) && !(B == H) && !(D == F)
+ */
+static inline void scale2x_8_sse2_border(scale2x_uint8* dst, const scale2x_uint8* src0, const scale2x_uint8* src1, const scale2x_uint8* src2, unsigned count)
+{
+	__m128i B, D, E, F, H, e1, e2;
+	__m128i BDeq, BFeq, BHeq, DFeq;
+	static const unsigned char mask_first[] = {255,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0};
+	static const unsigned char mask_last[] = {0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,255};
+
+	assert(count >= 32);
+	assert(count % 16 == 0);
+
+	/* first run */
+	B = *((__m128i *)src0);
+	E = *((__m128i *)src1);
+	H = *((__m128i *)src2);
+	D = _mm_or_si128(_mm_and_si128(E, *((__m128i *)mask_first)), _mm_slli_si128(E, 1));
+	F = _mm_or_si128(_mm_srli_si128(E, 1), _mm_slli_si128(*(((__m128i *)src1)+1), 15));
+	src0 += 16;
+	src1 += 16;
+	src2 += 16;
+
+	BDeq = _mm_cmpeq_epi8(B, D);
+	BFeq = _mm_cmpeq_epi8(B, F);
+	BHeq = _mm_cmpeq_epi8(B, H);
+	DFeq = _mm_cmpeq_epi8(D, F);
+
+	e1 = SEL(B, E, _mm_andnot_si128(DFeq, _mm_andnot_si128(BHeq, BDeq)));
+	e2 = SEL(B, E, _mm_andnot_si128(DFeq, _mm_andnot_si128(BHeq, BFeq)));
+
+	*((__m128i *)dst) = _mm_unpacklo_epi8(e1, e2);
+	dst += 16;
+	*((__m128i *)dst) = _mm_unpackhi_epi8(e1, e2);
+	dst += 16;
+
+	/* middle */
+	for (count -= 32; count > 0; count -= 16) {
+		B = *((__m128i *)src0);
+		E = *((__m128i *)src1);
+		H = *((__m128i *)src2);
+		D = _mm_or_si128(_mm_srli_si128(*(((__m128i *)src1)-1), 15), _mm_slli_si128(E, 1));
+		F = _mm_or_si128(_mm_srli_si128(E, 1), _mm_slli_si128(*(((__m128i *)src1)+1), 15));
+		src0 += 16;
+		src1 += 16;
+		src2 += 16;
+
+		BDeq = _mm_cmpeq_epi8(B, D);
+		BFeq = _mm_cmpeq_epi8(B, F);
+		BHeq = _mm_cmpeq_epi8(B, H);
+		DFeq = _mm_cmpeq_epi8(D, F);
+
+		e1 = SEL(B, E, _mm_andnot_si128(DFeq, _mm_andnot_si128(BHeq, BDeq)));
+		e2 = SEL(B, E, _mm_andnot_si128(DFeq, _mm_andnot_si128(BHeq, BFeq)));
+
+		*((__m128i *)dst) = _mm_unpacklo_epi8(e1, e2);
+		dst += 16;
+		*((__m128i *)dst) = _mm_unpackhi_epi8(e1, e2);
+		dst += 16;
+	}
+
+	/* last run */
+	B = *((__m128i *)src0);
+	E = *((__m128i *)src1);
+	H = *((__m128i *)src2);
+	D = _mm_or_si128(_mm_srli_si128(*(((__m128i *)src1)-1), 15), _mm_slli_si128(E, 1));
+	F = _mm_or_si128(_mm_srli_si128(E, 1), _mm_and_si128(E, *((__m128i *)mask_last)));
+	src0 += 16;
+	src1 += 16;
+	src2 += 16;
+
+	BDeq = _mm_cmpeq_epi8(B, D);
+	BFeq = _mm_cmpeq_epi8(B, F);
+	BHeq = _mm_cmpeq_epi8(B, H);
+	DFeq = _mm_cmpeq_epi8(D, F);
+
+	e1 = SEL(B, E, _mm_andnot_si128(DFeq, _mm_andnot_si128(BHeq, BDeq)));
+	e2 = SEL(B, E, _mm_andnot_si128(DFeq, _mm_andnot_si128(BHeq, BFeq)));
+
+	*((__m128i *)dst) = _mm_unpacklo_epi8(e1, e2);
+	dst += 16;
+	*((__m128i *)dst) = _mm_unpackhi_epi8(e1, e2);
+	dst += 16;
+}
+
+/**
+ * Scale by a factor of 2 a row of pixels of 8 bits.
+ * This is a very fast SSE2 implementation.
+ * The implementation uses a combination of cmp/and/not operations to
+ * completly remove the need of conditional jumps. This trick give the
+ * major speed improvement.
+ * Also, using the 16 bytes SSE2 registers more than one pixel are computed
+ * at the same time.
+ * The pixels over the left and right borders are assumed of the same color of
+ * the pixels on the border.
+ * Note that the implementation is optimized to write data sequentially to
+ * maximize the bandwidth on video memory.
+ * \param src0 Pointer at the first pixel of the previous row.
+ * \param src1 Pointer at the first pixel of the current row.
+ * \param src2 Pointer at the first pixel of the next row.
+ * \param count Length in pixels of the src0, src1 and src2 rows. It must
+ * be at least 32 and a multiple of 16
+ * \param dst0 First destination row, double length in pixels.
+ * \param dst1 Second destination row, double length in pixels.
+ */
+void scale2x_8_sse2(scale2x_uint8* dst0, scale2x_uint8* dst1, const scale2x_uint8* src0, const scale2x_uint8* src1, const scale2x_uint8* src2, unsigned count)
+{
+	if (count % 16 != 0 || count < 32) {
+		scale2x_8_def(dst0, dst1, src0, src1, src2, count);
+	} else {
+		scale2x_8_sse2_border(dst0, src0, src1, src2, count);
+		scale2x_8_sse2_border(dst1, src2, src1, src0, count);
+	}
+}
+#endif /* __x86_64__ */
