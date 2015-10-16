@@ -459,6 +459,13 @@ void scale(unsigned scale, void* void_dst, unsigned dst_slice, const void* void_
 			stage_scale2x4_impl = (stage_scale2x4_t)scale2x4_16_sse2;
 		} else
 #endif
+#ifdef USE_SCALE2X_ALTIVEC
+		if (!(scale_options & SCALE2X_OPTION_NO_ALTIVEC)) {
+			stage_scale2x_impl = (stage_scale2x_t)scale2x_16_altivec;
+			stage_scale2x3_impl = (stage_scale3x_t)scale2x3_16_def;
+			stage_scale2x4_impl = (stage_scale2x4_t)scale2x4_16_def;
+		} else
+#endif
 		{
 			stage_scale2x_impl = (stage_scale2x_t)scale2x_16_def;
 			stage_scale2x3_impl = (stage_scale3x_t)scale2x3_16_def;
@@ -472,6 +479,13 @@ void scale(unsigned scale, void* void_dst, unsigned dst_slice, const void* void_
 			stage_scale2x_impl = (stage_scale2x_t)scale2x_32_sse2;
 			stage_scale2x3_impl = (stage_scale3x_t)scale2x3_32_sse2;
 			stage_scale2x4_impl = (stage_scale2x4_t)scale2x4_32_sse2;
+		} else
+#endif
+#ifdef USE_SCALE2X_ALTIVEC
+		if (!(scale_options & SCALE2X_OPTION_NO_ALTIVEC)) {
+			stage_scale2x_impl = (stage_scale2x_t)scale2x_32_altivec;
+			stage_scale2x3_impl = (stage_scale3x_t)scale2x3_32_def;
+			stage_scale2x4_impl = (stage_scale2x4_t)scale2x4_32_def;
 		} else
 #endif
 		{
