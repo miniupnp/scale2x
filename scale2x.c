@@ -1688,6 +1688,170 @@ static inline void scale2x_8_sse2_border(scale2x_uint8* dst, const scale2x_uint8
 	dst += 16;
 }
 
+static inline void scale2x_16_sse2_border(scale2x_uint16* dst, const scale2x_uint16* src0, const scale2x_uint16* src1, const scale2x_uint16* src2, unsigned count)
+{
+	__m128i B, D, E, F, H, e1, e2;
+	__m128i BDeq, BFeq, BHeq, DFeq;
+	const __m128i mask_first = _mm_set_epi16(0,0,0,0, 0,0,0,0xffff);
+	const __m128i mask_last = _mm_set_epi16(0xffff,0,0,0, 0,0,0,0);
+
+	assert(count >= 16);
+	assert(count % 8 == 0);
+
+	/* first run */
+	B = *((const __m128i *)src0);
+	E = *((const __m128i *)src1);
+	H = *((const __m128i *)src2);
+	D = _mm_or_si128(_mm_and_si128(E, mask_first), _mm_slli_si128(E, 2));
+	F = _mm_or_si128(_mm_srli_si128(E, 2), _mm_slli_si128(*(((const __m128i *)src1)+1), 14));
+	src0 += 8;
+	src1 += 8;
+	src2 += 8;
+
+	BDeq = _mm_cmpeq_epi16(B, D);
+	BFeq = _mm_cmpeq_epi16(B, F);
+	BHeq = _mm_cmpeq_epi16(B, H);
+	DFeq = _mm_cmpeq_epi16(D, F);
+
+	e1 = SEL(B, E, _mm_andnot_si128(DFeq, _mm_andnot_si128(BHeq, BDeq)));
+	e2 = SEL(B, E, _mm_andnot_si128(DFeq, _mm_andnot_si128(BHeq, BFeq)));
+
+	*((__m128i *)dst) = _mm_unpacklo_epi16(e1, e2);
+	dst += 8;
+	*((__m128i *)dst) = _mm_unpackhi_epi16(e1, e2);
+	dst += 8;
+
+	/* middle */
+	for (count -= 16; count > 0; count -= 8) {
+		B = *((const __m128i *)src0);
+		E = *((const __m128i *)src1);
+		H = *((const __m128i *)src2);
+		D = _mm_or_si128(_mm_srli_si128(*(((const __m128i *)src1)-1), 14), _mm_slli_si128(E, 2));
+		F = _mm_or_si128(_mm_srli_si128(E, 2), _mm_slli_si128(*(((const __m128i *)src1)+1), 14));
+		src0 += 8;
+		src1 += 8;
+		src2 += 8;
+
+		BDeq = _mm_cmpeq_epi16(B, D);
+		BFeq = _mm_cmpeq_epi16(B, F);
+		BHeq = _mm_cmpeq_epi16(B, H);
+		DFeq = _mm_cmpeq_epi16(D, F);
+
+		e1 = SEL(B, E, _mm_andnot_si128(DFeq, _mm_andnot_si128(BHeq, BDeq)));
+		e2 = SEL(B, E, _mm_andnot_si128(DFeq, _mm_andnot_si128(BHeq, BFeq)));
+
+		*((__m128i *)dst) = _mm_unpacklo_epi16(e1, e2);
+		dst += 8;
+		*((__m128i *)dst) = _mm_unpackhi_epi16(e1, e2);
+		dst += 8;
+	}
+
+	/* last run */
+	B = *((const __m128i *)src0);
+	E = *((const __m128i *)src1);
+	H = *((const __m128i *)src2);
+	D = _mm_or_si128(_mm_srli_si128(*(((const __m128i *)src1)-1), 14), _mm_slli_si128(E, 2));
+	F = _mm_or_si128(_mm_srli_si128(E, 2), _mm_and_si128(E, mask_last));
+	src0 += 8;
+	src1 += 8;
+	src2 += 8;
+
+	BDeq = _mm_cmpeq_epi16(B, D);
+	BFeq = _mm_cmpeq_epi16(B, F);
+	BHeq = _mm_cmpeq_epi16(B, H);
+	DFeq = _mm_cmpeq_epi16(D, F);
+
+	e1 = SEL(B, E, _mm_andnot_si128(DFeq, _mm_andnot_si128(BHeq, BDeq)));
+	e2 = SEL(B, E, _mm_andnot_si128(DFeq, _mm_andnot_si128(BHeq, BFeq)));
+
+	*((__m128i *)dst) = _mm_unpacklo_epi16(e1, e2);
+	dst += 8;
+	*((__m128i *)dst) = _mm_unpackhi_epi16(e1, e2);
+	dst += 8;
+}
+
+static inline void scale2x_32_sse2_border(scale2x_uint32* dst, const scale2x_uint32* src0, const scale2x_uint32* src1, const scale2x_uint32* src2, unsigned count)
+{
+	__m128i B, D, E, F, H, e1, e2;
+	__m128i BDeq, BFeq, BHeq, DFeq;
+	const __m128i mask_first = _mm_set_epi32(0,0,0,0xffffffff);
+	const __m128i mask_last = _mm_set_epi32(0xffffffff,0,0,0);
+
+	assert(count >= 8);
+	assert(count % 4 == 0);
+
+	/* first run */
+	B = *((const __m128i *)src0);
+	E = *((const __m128i *)src1);
+	H = *((const __m128i *)src2);
+	D = _mm_or_si128(_mm_and_si128(E, mask_first), _mm_slli_si128(E, 4));
+	F = _mm_or_si128(_mm_srli_si128(E, 4), _mm_slli_si128(*(((const __m128i *)src1)+1), 12));
+	src0 += 4;
+	src1 += 4;
+	src2 += 4;
+
+	BDeq = _mm_cmpeq_epi32(B, D);
+	BFeq = _mm_cmpeq_epi32(B, F);
+	BHeq = _mm_cmpeq_epi32(B, H);
+	DFeq = _mm_cmpeq_epi32(D, F);
+
+	e1 = SEL(B, E, _mm_andnot_si128(DFeq, _mm_andnot_si128(BHeq, BDeq)));
+	e2 = SEL(B, E, _mm_andnot_si128(DFeq, _mm_andnot_si128(BHeq, BFeq)));
+
+	*((__m128i *)dst) = _mm_unpacklo_epi32(e1, e2);
+	dst += 4;
+	*((__m128i *)dst) = _mm_unpackhi_epi32(e1, e2);
+	dst += 4;
+
+	/* middle */
+	for (count -= 8; count > 0; count -= 4) {
+		B = *((const __m128i *)src0);
+		E = *((const __m128i *)src1);
+		H = *((const __m128i *)src2);
+		D = _mm_or_si128(_mm_srli_si128(*(((const __m128i *)src1)-1), 12), _mm_slli_si128(E, 4));
+		F = _mm_or_si128(_mm_srli_si128(E, 4), _mm_slli_si128(*(((const __m128i *)src1)+1), 12));
+		src0 += 4;
+		src1 += 4;
+		src2 += 4;
+
+		BDeq = _mm_cmpeq_epi32(B, D);
+		BFeq = _mm_cmpeq_epi32(B, F);
+		BHeq = _mm_cmpeq_epi32(B, H);
+		DFeq = _mm_cmpeq_epi32(D, F);
+
+		e1 = SEL(B, E, _mm_andnot_si128(DFeq, _mm_andnot_si128(BHeq, BDeq)));
+		e2 = SEL(B, E, _mm_andnot_si128(DFeq, _mm_andnot_si128(BHeq, BFeq)));
+
+		*((__m128i *)dst) = _mm_unpacklo_epi32(e1, e2);
+		dst += 4;
+		*((__m128i *)dst) = _mm_unpackhi_epi32(e1, e2);
+		dst += 4;
+	}
+
+	/* last run */
+	B = *((const __m128i *)src0);
+	E = *((const __m128i *)src1);
+	H = *((const __m128i *)src2);
+	D = _mm_or_si128(_mm_srli_si128(*(((const __m128i *)src1)-1), 12), _mm_slli_si128(E, 4));
+	F = _mm_or_si128(_mm_srli_si128(E, 4), _mm_and_si128(E, mask_last));
+	src0 += 4;
+	src1 += 4;
+	src2 += 4;
+
+	BDeq = _mm_cmpeq_epi32(B, D);
+	BFeq = _mm_cmpeq_epi32(B, F);
+	BHeq = _mm_cmpeq_epi32(B, H);
+	DFeq = _mm_cmpeq_epi32(D, F);
+
+	e1 = SEL(B, E, _mm_andnot_si128(DFeq, _mm_andnot_si128(BHeq, BDeq)));
+	e2 = SEL(B, E, _mm_andnot_si128(DFeq, _mm_andnot_si128(BHeq, BFeq)));
+
+	*((__m128i *)dst) = _mm_unpacklo_epi32(e1, e2);
+	dst += 4;
+	*((__m128i *)dst) = _mm_unpackhi_epi32(e1, e2);
+	dst += 4;
+}
+
 /**
  * Scale by a factor of 2 a row of pixels of 8 bits.
  * This is a very fast SSE2 implementation.
@@ -1717,4 +1881,73 @@ void scale2x_8_sse2(scale2x_uint8* dst0, scale2x_uint8* dst1, const scale2x_uint
 		scale2x_8_sse2_border(dst1, src2, src1, src0, count);
 	}
 }
+
+void scale2x_16_sse2(scale2x_uint16* dst0, scale2x_uint16* dst1, const scale2x_uint16* src0, const scale2x_uint16* src1, const scale2x_uint16* src2, unsigned count)
+{
+	if (count % 8 != 0 || count < 16) {
+		scale2x_16_def(dst0, dst1, src0, src1, src2, count);
+	} else {
+		scale2x_16_sse2_border(dst0, src0, src1, src2, count);
+		scale2x_16_sse2_border(dst1, src2, src1, src0, count);
+	}
+}
+
+void scale2x_32_sse2(scale2x_uint32* dst0, scale2x_uint32* dst1, const scale2x_uint32* src0, const scale2x_uint32* src1, const scale2x_uint32* src2, unsigned count)
+{
+	if (count % 4 != 0 || count < 8) {
+		scale2x_32_def(dst0, dst1, src0, src1, src2, count);
+	} else {
+		scale2x_32_sse2_border(dst0, src0, src1, src2, count);
+		scale2x_32_sse2_border(dst1, src2, src1, src0, count);
+	}
+}
+
+/**
+ * Scale by a factor of 2x3 a row of pixels of 8 bits.
+ * This function operates like scale2x_8_sse2() but with an expansion
+ * factor of 2x3 instead of 2x2.
+ */
+void scale2x3_8_sse2(scale2x_uint8* dst0, scale2x_uint8* dst1, scale2x_uint8* dst2, const scale2x_uint8* src0, const scale2x_uint8* src1, const scale2x_uint8* src2, unsigned count)
+{
+	if (count % 16 != 0 || count < 32) {
+		scale2x3_8_def(dst0, dst1, dst2, src0, src1, src2, count);
+	} else {
+		scale2x_8_sse2_border(dst0, src0, src1, src2, count);
+		scale2x_8_def_center(dst1, src0, src1, src2, count);
+		scale2x_8_sse2_border(dst2, src2, src1, src0, count);
+	}
+}
+
+/**
+ * Scale by a factor of 2x3 a row of pixels of 16 bits.
+ * This function operates like scale2x_16_sse2() but with an expansion
+ * factor of 2x3 instead of 2x2.
+ */
+void scale2x3_16_sse2(scale2x_uint16* dst0, scale2x_uint16* dst1, scale2x_uint16* dst2, const scale2x_uint16* src0, const scale2x_uint16* src1, const scale2x_uint16* src2, unsigned count)
+{
+	if (count % 8 != 0 || count < 16) {
+		scale2x3_16_def(dst0, dst1, dst2, src0, src1, src2, count);
+	} else {
+		scale2x_16_sse2_border(dst0, src0, src1, src2, count);
+		scale2x_16_def_center(dst1, src0, src1, src2, count);
+		scale2x_16_sse2_border(dst2, src2, src1, src0, count);
+	}
+}
+
+/**
+ * Scale by a factor of 2x3 a row of pixels of 32 bits.
+ * This function operates like scale2x_32_sse2() but with an expansion
+ * factor of 2x3 instead of 2x2.
+ */
+void scale2x3_32_sse2(scale2x_uint32* dst0, scale2x_uint32* dst1, scale2x_uint32* dst2, const scale2x_uint32* src0, const scale2x_uint32* src1, const scale2x_uint32* src2, unsigned count)
+{
+	if (count % 4 != 0 || count < 8) {
+		scale2x3_32_def(dst0, dst1, dst2, src0, src1, src2, count);
+	} else {
+		scale2x_32_sse2_border(dst0, src0, src1, src2, count);
+		scale2x_32_def_center(dst1, src0, src1, src2, count);
+		scale2x_32_sse2_border(dst2, src2, src1, src0, count);
+	}
+}
+
 #endif /* __x86_64__ */
