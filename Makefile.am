@@ -1,4 +1,4 @@
-bin_PROGRAMS = scalex scalerx
+bin_PROGRAMS = scalex scalerx timescale2x
 
 EXTRA_DIST = \
 	scale2x.h scale3x.h \
@@ -65,6 +65,9 @@ scalex_SOURCES = \
 
 scalerx_SOURCES = \
 	scalerx.c getopt.c portable.h file.c file.h pixel.c pixel.h
+
+timescale2x_SOURCES = \
+	timescale2x.c scale2x.h scale2x.c file.h file.c
 
 clean-local:
 	$(AM_V_at)$(RM) tmp/tx*.png tmp/tr*.png tmp/tt*.png
