@@ -1482,6 +1482,7 @@ void scale2x4_32_mmx(scale2x_uint32* dst0, scale2x_uint32* dst1, scale2x_uint32*
 static inline void scale2x_8_altivec_border(scale2x_uint8* dst, const scale2x_uint8* src0, const scale2x_uint8* src1, const scale2x_uint8* src2, unsigned count)
 {
 	vector unsigned char B, D, E, F, H, e1, e2;
+	vector unsigned char previousE, nextE;
 	vector __bool char BDeq, BFeq, BHeq, DFeq;
 	static const vector unsigned char perm_first = {0,0,1,2,3,4,5,6,7,8,9,10,11,12,13,14};
 	static const vector unsigned char perm_last = {1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,15};
@@ -1493,11 +1494,12 @@ static inline void scale2x_8_altivec_border(scale2x_uint8* dst, const scale2x_ui
 	B = *((vector unsigned char *)src0);
 	E = *((vector unsigned char *)src1);
 	H = *((vector unsigned char *)src2);
-	D = vec_perm(E, E, perm_first);
-	F = vec_perm(E, *(((vector unsigned char *)src1)+1), vec_lvsl(1, src1));
 	src0 += 16;
 	src1 += 16;
 	src2 += 16;
+	nextE = *((const vector unsigned char *)src1);
+	D = vec_perm(E, E, perm_first);
+	F = vec_perm(E, nextE, vec_lvsl(1, src1));
 
 	BDeq = vec_cmpeq(B, D);
 	BFeq = vec_cmpeq(B, F);
@@ -1512,16 +1514,19 @@ static inline void scale2x_8_altivec_border(scale2x_uint8* dst, const scale2x_ui
 	*((vector unsigned char *)dst) = vec_mergel(e1, e2);
 	dst += 16;
 
+	previousE = E;
+
 	/* middle */
 	for (count -= 32; count > 0; count -= 16) {
 		B = *((vector unsigned char *)src0);
-		E = *((vector unsigned char *)src1);
+		E = nextE;
 		H = *((vector unsigned char *)src2);
-		D = vec_perm(*(((vector unsigned char *)src1)-1), E, vec_lvsl(15, src1));
-		F = vec_perm(E, *(((vector unsigned char *)src1)+1), vec_lvsl(1, src1));
 		src0 += 16;
 		src1 += 16;
 		src2 += 16;
+		nextE = *((const vector unsigned char *)src1);
+		D = vec_perm(previousE, E, vec_lvsl(15, src1));
+		F = vec_perm(E, nextE, vec_lvsl(1, src1));
 
 		BDeq = vec_cmpeq(B, D);
 		BFeq = vec_cmpeq(B, F);
@@ -1535,13 +1540,15 @@ static inline void scale2x_8_altivec_border(scale2x_uint8* dst, const scale2x_ui
 		dst += 16;
 		*((vector unsigned char *)dst) = vec_mergel(e1, e2);
 		dst += 16;
+
+		previousE = E;
 	}
 
 	/* last run */
 	B = *((vector unsigned char *)src0);
-	E = *((vector unsigned char *)src1);
+	E = nextE;
 	H = *((vector unsigned char *)src2);
-	D = vec_perm(*(((vector unsigned char *)src1)-1), E, vec_lvsl(15, src1));
+	D = vec_perm(previousE, E, vec_lvsl(15, src1));
 	F = vec_perm(E, E, perm_last);
 	src0 += 16;
 	src1 += 16;
