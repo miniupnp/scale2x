@@ -1434,6 +1434,29 @@ void scale2x_8_altivec(scale2x_uint8* dst0, scale2x_uint8* dst1, const scale2x_u
 	}
 }
 
+void scale2x3_8_altivec(scale2x_uint8* dst0, scale2x_uint8* dst1, scale2x_uint8* dst2, const scale2x_uint8* src0, const scale2x_uint8* src1, const scale2x_uint8* src2, unsigned count)
+{
+	if (count % 16 != 0 || count < 32) {
+		scale2x3_8_def(dst0, dst1, dst2, src0, src1, src2, count);
+	} else {
+		scale2x_8_altivec_border(dst0, src0, src1, src2, count);
+		scale2x_8_def_center(dst1, src0, src1, src2, count);
+		scale2x_8_altivec_border(dst2, src2, src1, src0, count);
+	}
+}
+
+void scale2x4_8_altivec(scale2x_uint8* dst0, scale2x_uint8* dst1, scale2x_uint8* dst2, scale2x_uint8* dst3, const scale2x_uint8* src0, const scale2x_uint8* src1, const scale2x_uint8* src2, unsigned count)
+{
+	if (count % 16 != 0 || count < 32) {
+		scale2x4_8_def(dst0, dst1, dst2, dst3, src0, src1, src2, count);
+	} else {
+		scale2x_8_altivec_border(dst0, src0, src1, src2, count);
+		scale2x_8_def_center(dst1, src0, src1, src2, count);
+		scale2x_8_def_center(dst2, src0, src1, src2, count);
+		scale2x_8_altivec_border(dst3, src2, src1, src0, count);
+	}
+}
+
 /**
  * Scale by a factor of 2 a row of pixels of 16 bits.
  * This function operates like scale2x_8_altivec() but for 16 bits pixels.
@@ -1455,6 +1478,29 @@ void scale2x_16_altivec(scale2x_uint16* dst0, scale2x_uint16* dst1, const scale2
 	}
 }
 
+void scale2x3_16_altivec(scale2x_uint16* dst0, scale2x_uint16* dst1, scale2x_uint16* dst2, const scale2x_uint16* src0, const scale2x_uint16* src1, const scale2x_uint16* src2, unsigned count)
+{
+	if (count % 8 != 0 || count < 16) {
+		scale2x3_16_def(dst0, dst1, dst2, src0, src1, src2, count);
+	} else {
+		scale2x_16_altivec_border(dst0, src0, src1, src2, count);
+		scale2x_16_def_center(dst1, src0, src1, src2, count);
+		scale2x_16_altivec_border(dst2, src2, src1, src0, count);
+	}
+}
+
+void scale2x4_16_altivec(scale2x_uint16* dst0, scale2x_uint16* dst1, scale2x_uint16* dst2, scale2x_uint16* dst3, const scale2x_uint16* src0, const scale2x_uint16* src1, const scale2x_uint16* src2, unsigned count)
+{
+	if (count % 8 != 0 || count < 16) {
+		scale2x4_16_def(dst0, dst1, dst2, dst3, src0, src1, src2, count);
+	} else {
+		scale2x_16_altivec_border(dst0, src0, src1, src2, count);
+		scale2x_16_def_center(dst1, src0, src1, src2, count);
+		scale2x_16_def_center(dst2, src0, src1, src2, count);
+		scale2x_16_altivec_border(dst3, src2, src1, src0, count);
+	}
+}
+
 /**
  * Scale by a factor of 2 a row of pixels of 32 bits.
  * This function operates like scale2x_8_altivec() but for 32 bits pixels.
@@ -1473,6 +1519,29 @@ void scale2x_32_altivec(scale2x_uint32* dst0, scale2x_uint32* dst1, const scale2
 	} else {
 		scale2x_32_altivec_border(dst0, src0, src1, src2, count);
 		scale2x_32_altivec_border(dst1, src2, src1, src0, count);
+	}
+}
+
+void scale2x3_32_altivec(scale2x_uint32* dst0, scale2x_uint32* dst1, scale2x_uint32* dst2, const scale2x_uint32* src0, const scale2x_uint32* src1, const scale2x_uint32* src2, unsigned count)
+{
+	if (count % 4 != 0 || count < 8) {
+		scale2x3_32_def(dst0, dst1, dst2, src0, src1, src2, count);
+	} else {
+		scale2x_32_altivec_border(dst0, src0, src1, src2, count);
+		scale2x_32_def_center(dst1, src0, src1, src2, count);
+		scale2x_32_altivec_border(dst2, src2, src1, src0, count);
+	}
+}
+
+void scale2x4_32_altivec(scale2x_uint32* dst0, scale2x_uint32* dst1, scale2x_uint32* dst2, scale2x_uint32* dst3, const scale2x_uint32* src0, const scale2x_uint32* src1, const scale2x_uint32* src2, unsigned count)
+{
+	if (count % 4 != 0 || count < 8) {
+		scale2x4_32_def(dst0, dst1, dst2, dst3, src0, src1, src2, count);
+	} else {
+		scale2x_32_altivec_border(dst0, src0, src1, src2, count);
+		scale2x_32_def_center(dst1, src0, src1, src2, count);
+		scale2x_32_def_center(dst2, src0, src1, src2, count);
+		scale2x_32_altivec_border(dst3, src2, src1, src0, count);
 	}
 }
 
