@@ -1,6 +1,7 @@
 /*
  * This file is part of the Scale2x project.
  *
+ * Copyright (C) 2018 Thomas Bernard
  * Copyright (C) 2003, 2004 Andrea Mazzoleni
  *
  * This program is free software; you can redistribute it and/or modify
@@ -38,34 +39,29 @@
 #include <assert.h>
 #include <stdlib.h>
 
+/**
+ * Functions to apply the Scale??? effects on a group of rows. Used internally.
+ */
 typedef void (*stage_scale2x_t)(void* dst0, void* dst1, const void* src0, const void* src1, const void* src2, unsigned pixel_per_row);
 typedef void (*stage_scale3x_t)(void* dst0, void* dst1, void* dst2, const void* src0, const void* src1, const void* src2, unsigned pixel_per_row);
 typedef void (*stage_scale2x4_t)(void* dst0, void* dst1, void* dst2, void* dst3, const void* src0, const void* src1, const void* src2, unsigned pixel_per_row);
 
-/**
- * Apply the Scale2x effect on a group of rows. Used internally.
- */
-static stage_scale2x_t stage_scale2x_impl = NULL;
+struct stage_scale_funcs {
+	stage_scale2x_t stage_scale2x;
+	stage_scale3x_t stage_scale2x3;
+	stage_scale2x4_t stage_scale2x4;
+	stage_scale3x_t stage_scale3x;
+};
 
-/**
- * Apply the Scale2x3 effect on a group of rows. Used internally.
- */
-static stage_scale3x_t stage_scale2x3_impl = NULL;
-
-/**
- * Apply the Scale2x4 effect on a group of rows. Used internally.
- */
-static stage_scale2x4_t stage_scale2x4_impl = NULL;
-
-/**
- * Apply the Scale3x effect on a group of rows. Used internally.
- */
-static stage_scale3x_t stage_scale3x_impl = NULL;
+#define stage_scale2x_impl	funcs->stage_scale2x
+#define stage_scale2x3_impl	funcs->stage_scale2x3
+#define stage_scale2x4_impl	funcs->stage_scale2x4
+#define stage_scale3x_impl	funcs->stage_scale3x
 
 /**
  * Apply the Scale4x effect on a group of rows. Used internally.
  */
-static inline void stage_scale4x(void* dst0, void* dst1, void* dst2, void* dst3, const void* src0, const void* src1, const void* src2, const void* src3, unsigned pixel_per_row)
+static inline void stage_scale4x(const struct stage_scale_funcs * funcs, void* dst0, void* dst1, void* dst2, void* dst3, const void* src0, const void* src1, const void* src2, const void* src3, unsigned pixel_per_row)
 {
 	stage_scale2x_impl(dst0, dst1, src0, src1, src2, 2 * pixel_per_row);
 	stage_scale2x_impl(dst2, dst3, src1, src2, src3, 2 * pixel_per_row);
@@ -88,7 +84,7 @@ static inline void stage_scale4x(void* dst0, void* dst1, void* dst2, void* dst3,
  * \param width Horizontal size in pixels of the source bitmap.
  * \param height Vertical size in pixels of the source bitmap.
  */
-static void scale2x(void* void_dst, unsigned dst_slice, const void* void_src, unsigned src_slice, unsigned width, unsigned height)
+static void scale2x(const struct stage_scale_funcs * funcs, void* void_dst, unsigned dst_slice, const void* void_src, unsigned src_slice, unsigned width, unsigned height)
 {
 	unsigned char* dst = (unsigned char*)void_dst;
 	const unsigned char* src = (const unsigned char*)void_src;
@@ -128,7 +124,7 @@ static void scale2x(void* void_dst, unsigned dst_slice, const void* void_src, un
  * \param width Horizontal size in pixels of the source bitmap.
  * \param height Vertical size in pixels of the source bitmap.
  */
-static void scale2x3(void* void_dst, unsigned dst_slice, const void* void_src, unsigned src_slice, unsigned width, unsigned height)
+static void scale2x3(const struct stage_scale_funcs * funcs, void* void_dst, unsigned dst_slice, const void* void_src, unsigned src_slice, unsigned width, unsigned height)
 {
 	unsigned char* dst = (unsigned char*)void_dst;
 	const unsigned char* src = (const unsigned char*)void_src;
@@ -168,7 +164,7 @@ static void scale2x3(void* void_dst, unsigned dst_slice, const void* void_src, u
  * \param width Horizontal size in pixels of the source bitmap.
  * \param height Vertical size in pixels of the source bitmap.
  */
-static void scale2x4(void* void_dst, unsigned dst_slice, const void* void_src, unsigned src_slice, unsigned width, unsigned height)
+static void scale2x4(const struct stage_scale_funcs * funcs, void* void_dst, unsigned dst_slice, const void* void_src, unsigned src_slice, unsigned width, unsigned height)
 {
 	unsigned char* dst = (unsigned char*)void_dst;
 	const unsigned char* src = (const unsigned char*)void_src;
@@ -208,7 +204,7 @@ static void scale2x4(void* void_dst, unsigned dst_slice, const void* void_src, u
  * \param width Horizontal size in pixels of the source bitmap.
  * \param height Vertical size in pixels of the source bitmap.
  */
-static void scale3x(void* void_dst, unsigned dst_slice, const void* void_src, unsigned src_slice, unsigned width, unsigned height)
+static void scale3x(const struct stage_scale_funcs * funcs, void* void_dst, unsigned dst_slice, const void* void_src, unsigned src_slice, unsigned width, unsigned height)
 {
 	unsigned char* dst = (unsigned char*)void_dst;
 	const unsigned char* src = (const unsigned char*)void_src;
@@ -255,7 +251,7 @@ static void scale3x(void* void_dst, unsigned dst_slice, const void* void_src, un
  * \param width Horizontal size in pixels of the source bitmap.
  * \param height Vertical size in pixels of the source bitmap.
  */
-static void scale4x_buf(void* void_dst, unsigned dst_slice, void* void_mid, unsigned mid_slice, const void* void_src, unsigned src_slice, unsigned width, unsigned height)
+static void scale4x_buf(const struct stage_scale_funcs * funcs, void* void_dst, unsigned dst_slice, void* void_mid, unsigned mid_slice, const void* void_src, unsigned src_slice, unsigned width, unsigned height)
 {
 	unsigned char* dst = (unsigned char*)void_dst;
 	const unsigned char* src = (const unsigned char*)void_src;
@@ -277,11 +273,11 @@ static void scale4x_buf(void* void_dst, unsigned dst_slice, void* void_mid, unsi
 	stage_scale2x_impl(SCMID(-2 + 6), SCMID(-1 + 6), SCSRC(0), SCSRC(0), SCSRC(1), width);
 	stage_scale2x_impl(SCMID(0), SCMID(1), SCSRC(0), SCSRC(1), SCSRC(2), width);
 	stage_scale2x_impl(SCMID(2), SCMID(3), SCSRC(1), SCSRC(2), SCSRC(3), width);
-	stage_scale4x(SCDST(0), SCDST(1), SCDST(2), SCDST(3), SCMID(-2 + 6), SCMID(-2 + 6), SCMID(-1 + 6), SCMID(0), width);
+	stage_scale4x(funcs, SCDST(0), SCDST(1), SCDST(2), SCDST(3), SCMID(-2 + 6), SCMID(-2 + 6), SCMID(-1 + 6), SCMID(0), width);
 
 	dst = SCDST(4);
 
-	stage_scale4x(SCDST(0), SCDST(1), SCDST(2), SCDST(3), SCMID(-1 + 6), SCMID(0), SCMID(1), SCMID(2), width);
+	stage_scale4x(funcs, SCDST(0), SCDST(1), SCDST(2), SCDST(3), SCMID(-1 + 6), SCMID(0), SCMID(1), SCMID(2), width);
 
 	dst = SCDST(4);
 
@@ -290,7 +286,7 @@ static void scale4x_buf(void* void_dst, unsigned dst_slice, void* void_mid, unsi
 		unsigned char* tmp;
 
 		stage_scale2x_impl(SCMID(4), SCMID(5), SCSRC(2), SCSRC(3), SCSRC(4), width);
-		stage_scale4x(SCDST(0), SCDST(1), SCDST(2), SCDST(3), SCMID(1), SCMID(2), SCMID(3), SCMID(4), width);
+		stage_scale4x(funcs, SCDST(0), SCDST(1), SCDST(2), SCDST(3), SCMID(1), SCMID(2), SCMID(3), SCMID(4), width);
 
 		dst = SCDST(4);
 		src = SCSRC(1);
@@ -308,11 +304,11 @@ static void scale4x_buf(void* void_dst, unsigned dst_slice, void* void_mid, unsi
 	}
 
 	stage_scale2x_impl(SCMID(4), SCMID(5), SCSRC(2), SCSRC(3), SCSRC(3), width);
-	stage_scale4x(SCDST(0), SCDST(1), SCDST(2), SCDST(3), SCMID(1), SCMID(2), SCMID(3), SCMID(4), width);
+	stage_scale4x(funcs, SCDST(0), SCDST(1), SCDST(2), SCDST(3), SCMID(1), SCMID(2), SCMID(3), SCMID(4), width);
 
 	dst = SCDST(4);
 
-	stage_scale4x(SCDST(0), SCDST(1), SCDST(2), SCDST(3), SCMID(3), SCMID(4), SCMID(5), SCMID(5), width);
+	stage_scale4x(funcs, SCDST(0), SCDST(1), SCDST(2), SCDST(3), SCMID(3), SCMID(4), SCMID(5), SCMID(5), width);
 }
 
 /**
@@ -331,7 +327,7 @@ static void scale4x_buf(void* void_dst, unsigned dst_slice, void* void_mid, unsi
  * \param width Horizontal size in pixels of the source bitmap.
  * \param height Vertical size in pixels of the source bitmap.
  */
-static void scale4x(void* void_dst, unsigned dst_slice, const void* void_src, unsigned src_slice, unsigned pixel, unsigned width, unsigned height)
+static void scale4x(const struct stage_scale_funcs * funcs, void* void_dst, unsigned dst_slice, const void* void_src, unsigned src_slice, unsigned pixel, unsigned width, unsigned height)
 {
 	unsigned mid_slice;
 	void* mid_ptr;
@@ -353,7 +349,7 @@ static void scale4x(void* void_dst, unsigned dst_slice, const void* void_src, un
 
 	mid_ptr = scale2x_align_ptr(mid_alloc);
 
-	scale4x_buf(void_dst, dst_slice, mid_ptr, mid_slice, void_src, src_slice, width, height);
+	scale4x_buf(funcs, void_dst, dst_slice, mid_ptr, mid_slice, void_src, src_slice, width, height);
 
 #if !HAVE_ALLOCA
 	free(mid_alloc);
@@ -362,7 +358,7 @@ static void scale4x(void* void_dst, unsigned dst_slice, const void* void_src, un
 
 /**
  * Check if the scale implementation is applicable at the given arguments.
- * \param scale Scale factor. 2, 203 (fox 2x3), 204 (for 2x4), 3 or 4.
+ * \param scale Scale factor. 2, 203 (for 2x3), 204 (for 2x4), 3 or 4.
  * \param pixel Bytes per pixel of the source and destination bitmap.
  * \param width Horizontal size in pixels of the source bitmap.
  * \param height Vertical size in pixels of the source bitmap.
@@ -428,93 +424,95 @@ unsigned int scale_set_options(unsigned int options)
  */
 void scale(unsigned scale, void* void_dst, unsigned dst_slice, const void* void_src, unsigned src_slice, unsigned pixel, unsigned width, unsigned height)
 {
+	struct stage_scale_funcs funcs;
+
 	switch (pixel) {
 	case 1 :
 #ifdef USE_SCALE2X_SSE2
 		if (!(scale_options & SCALE2X_OPTION_NO_SSE2)) {
-			stage_scale2x_impl = (stage_scale2x_t)scale2x_8_sse2;
-			stage_scale2x3_impl = (stage_scale3x_t)scale2x3_8_sse2;
-			stage_scale2x4_impl = (stage_scale2x4_t)scale2x4_8_sse2;
+			funcs.stage_scale2x = (stage_scale2x_t)scale2x_8_sse2;
+			funcs.stage_scale2x3 = (stage_scale3x_t)scale2x3_8_sse2;
+			funcs.stage_scale2x4 = (stage_scale2x4_t)scale2x4_8_sse2;
 		} else
 #endif
 #ifdef USE_SCALE2X_ALTIVEC
 		if (!(scale_options & SCALE2X_OPTION_NO_ALTIVEC)) {
-			stage_scale2x_impl = (stage_scale2x_t)scale2x_8_altivec;
-			stage_scale2x3_impl = (stage_scale3x_t)scale2x3_8_altivec;
-			stage_scale2x4_impl = (stage_scale2x4_t)scale2x4_8_altivec;
+			funcs.stage_scale2x = (stage_scale2x_t)scale2x_8_altivec;
+			funcs.stage_scale2x3 = (stage_scale3x_t)scale2x3_8_altivec;
+			funcs.stage_scale2x4 = (stage_scale2x4_t)scale2x4_8_altivec;
 		} else
 #endif
 #ifdef USE_SCALE2X_NEON
 		if (!(scale_options & SCALE2X_OPTION_NO_NEON)) {
-			stage_scale2x_impl = (stage_scale2x_t)scale2x_8_neon;
-			stage_scale2x3_impl = (stage_scale3x_t)scale2x3_8_neon;
-			stage_scale2x4_impl = (stage_scale2x4_t)scale2x4_8_neon;
+			funcs.stage_scale2x = (stage_scale2x_t)scale2x_8_neon;
+			funcs.stage_scale2x3 = (stage_scale3x_t)scale2x3_8_neon;
+			funcs.stage_scale2x4 = (stage_scale2x4_t)scale2x4_8_neon;
 		} else
 #endif
 		{
-			stage_scale2x_impl = (stage_scale2x_t)scale2x_8_def;
-			stage_scale2x3_impl = (stage_scale3x_t)scale2x3_8_def;
-			stage_scale2x4_impl = (stage_scale2x4_t)scale2x4_8_def;
+			funcs.stage_scale2x = (stage_scale2x_t)scale2x_8_def;
+			funcs.stage_scale2x3 = (stage_scale3x_t)scale2x3_8_def;
+			funcs.stage_scale2x4 = (stage_scale2x4_t)scale2x4_8_def;
 		}
-		stage_scale3x_impl = (stage_scale3x_t)scale3x_8_def;
+		funcs.stage_scale3x = (stage_scale3x_t)scale3x_8_def;
 		break;
 	case 2 :
 #ifdef USE_SCALE2X_SSE2
 		if (!(scale_options & SCALE2X_OPTION_NO_SSE2)) {
-			stage_scale2x_impl = (stage_scale2x_t)scale2x_16_sse2;
-			stage_scale2x3_impl = (stage_scale3x_t)scale2x3_16_sse2;
-			stage_scale2x4_impl = (stage_scale2x4_t)scale2x4_16_sse2;
+			funcs.stage_scale2x = (stage_scale2x_t)scale2x_16_sse2;
+			funcs.stage_scale2x3 = (stage_scale3x_t)scale2x3_16_sse2;
+			funcs.stage_scale2x4 = (stage_scale2x4_t)scale2x4_16_sse2;
 		} else
 #endif
 #ifdef USE_SCALE2X_ALTIVEC
 		if (!(scale_options & SCALE2X_OPTION_NO_ALTIVEC)) {
-			stage_scale2x_impl = (stage_scale2x_t)scale2x_16_altivec;
-			stage_scale2x3_impl = (stage_scale3x_t)scale2x3_16_altivec;
-			stage_scale2x4_impl = (stage_scale2x4_t)scale2x4_16_altivec;
+			funcs.stage_scale2x = (stage_scale2x_t)scale2x_16_altivec;
+			funcs.stage_scale2x3 = (stage_scale3x_t)scale2x3_16_altivec;
+			funcs.stage_scale2x4 = (stage_scale2x4_t)scale2x4_16_altivec;
 		} else
 #endif
 #ifdef USE_SCALE2X_NEON
 		if (!(scale_options & SCALE2X_OPTION_NO_NEON)) {
-			stage_scale2x_impl = (stage_scale2x_t)scale2x_16_neon;
-			stage_scale2x3_impl = (stage_scale3x_t)scale2x3_16_neon;
-			stage_scale2x4_impl = (stage_scale2x4_t)scale2x4_16_neon;
+			funcs.stage_scale2x = (stage_scale2x_t)scale2x_16_neon;
+			funcs.stage_scale2x3 = (stage_scale3x_t)scale2x3_16_neon;
+			funcs.stage_scale2x4 = (stage_scale2x4_t)scale2x4_16_neon;
 		} else
 #endif
 		{
-			stage_scale2x_impl = (stage_scale2x_t)scale2x_16_def;
-			stage_scale2x3_impl = (stage_scale3x_t)scale2x3_16_def;
-			stage_scale2x4_impl = (stage_scale2x4_t)scale2x4_16_def;
+			funcs.stage_scale2x = (stage_scale2x_t)scale2x_16_def;
+			funcs.stage_scale2x3 = (stage_scale3x_t)scale2x3_16_def;
+			funcs.stage_scale2x4 = (stage_scale2x4_t)scale2x4_16_def;
 		}
-		stage_scale3x_impl = (stage_scale3x_t)scale3x_16_def;
+		funcs.stage_scale3x = (stage_scale3x_t)scale3x_16_def;
 		break;
 	case 4 :
 #ifdef USE_SCALE2X_SSE2
 		if (!(scale_options & SCALE2X_OPTION_NO_SSE2)) {
-			stage_scale2x_impl = (stage_scale2x_t)scale2x_32_sse2;
-			stage_scale2x3_impl = (stage_scale3x_t)scale2x3_32_sse2;
-			stage_scale2x4_impl = (stage_scale2x4_t)scale2x4_32_sse2;
+			funcs.stage_scale2x = (stage_scale2x_t)scale2x_32_sse2;
+			funcs.stage_scale2x3 = (stage_scale3x_t)scale2x3_32_sse2;
+			funcs.stage_scale2x4 = (stage_scale2x4_t)scale2x4_32_sse2;
 		} else
 #endif
 #ifdef USE_SCALE2X_ALTIVEC
 		if (!(scale_options & SCALE2X_OPTION_NO_ALTIVEC)) {
-			stage_scale2x_impl = (stage_scale2x_t)scale2x_32_altivec;
-			stage_scale2x3_impl = (stage_scale3x_t)scale2x3_32_altivec;
-			stage_scale2x4_impl = (stage_scale2x4_t)scale2x4_32_altivec;
+			funcs.stage_scale2x = (stage_scale2x_t)scale2x_32_altivec;
+			funcs.stage_scale2x3 = (stage_scale3x_t)scale2x3_32_altivec;
+			funcs.stage_scale2x4 = (stage_scale2x4_t)scale2x4_32_altivec;
 		} else
 #endif
 #ifdef USE_SCALE2X_NEON
 		if (!(scale_options & SCALE2X_OPTION_NO_NEON)) {
-			stage_scale2x_impl = (stage_scale2x_t)scale2x_32_neon;
-			stage_scale2x3_impl = (stage_scale3x_t)scale2x3_32_neon;
-			stage_scale2x4_impl = (stage_scale2x4_t)scale2x4_32_neon;
+			funcs.stage_scale2x = (stage_scale2x_t)scale2x_32_neon;
+			funcs.stage_scale2x3 = (stage_scale3x_t)scale2x3_32_neon;
+			funcs.stage_scale2x4 = (stage_scale2x4_t)scale2x4_32_neon;
 		} else
 #endif
 		{
-			stage_scale2x_impl = (stage_scale2x_t)scale2x_32_def;
-			stage_scale2x3_impl = (stage_scale3x_t)scale2x3_32_def;
-			stage_scale2x4_impl = (stage_scale2x4_t)scale2x4_32_def;
+			funcs.stage_scale2x = (stage_scale2x_t)scale2x_32_def;
+			funcs.stage_scale2x3 = (stage_scale3x_t)scale2x3_32_def;
+			funcs.stage_scale2x4 = (stage_scale2x4_t)scale2x4_32_def;
 		}
-		stage_scale3x_impl = (stage_scale3x_t)scale3x_32_def;
+		funcs.stage_scale3x = (stage_scale3x_t)scale3x_32_def;
 		break;
 	default :
 		return;
@@ -522,21 +520,21 @@ void scale(unsigned scale, void* void_dst, unsigned dst_slice, const void* void_
 	switch (scale) {
 	case 202 :
 	case 2 :
-		scale2x(void_dst, dst_slice, void_src, src_slice, width, height);
+		scale2x(&funcs, void_dst, dst_slice, void_src, src_slice, width, height);
 		break;
 	case 203 :
-		scale2x3(void_dst, dst_slice, void_src, src_slice, width, height);
+		scale2x3(&funcs, void_dst, dst_slice, void_src, src_slice, width, height);
 		break;
 	case 204 :
-		scale2x4(void_dst, dst_slice, void_src, src_slice, width, height);
+		scale2x4(&funcs, void_dst, dst_slice, void_src, src_slice, width, height);
 		break;
 	case 303 :
 	case 3 :
-		scale3x(void_dst, dst_slice, void_src, src_slice, width, height);
+		scale3x(&funcs, void_dst, dst_slice, void_src, src_slice, width, height);
 		break;
 	case 404 :
 	case 4 :
-		scale4x(void_dst, dst_slice, void_src, src_slice, pixel, width, height);
+		scale4x(&funcs, void_dst, dst_slice, void_src, src_slice, pixel, width, height);
 		break;
 	}
 }
