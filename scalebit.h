@@ -28,6 +28,7 @@
 
 #define SCALE2X_OPTION_DEFAULT	0
 #define SCALE2X_OPTION_NO_SSE2	0x001
+#define SCALE2X_OPTION_NO_ALTIVEC	0x002
 
 unsigned int scale_set_options(unsigned int options);
 int scale_precondition(unsigned scale, unsigned pixel, unsigned width, unsigned height);

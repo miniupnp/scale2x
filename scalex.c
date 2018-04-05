@@ -269,11 +269,13 @@ void usage(void)
 	printf("Fast implementation of the Scale2/3/4x effects\n");
 #ifdef USE_SCALE2X_SSE2
 	printf("(using SSE2 optimization)\n");
+#elif defined(USE_SCALE2X_ALTIVEC)
+	printf("(using Altivec optimization)\n");
 #endif
 	printf("\nSyntax: scalex [-o options] [-k N] FROM.png TO.png\n");
 	printf("\nOptions:\n");
 	printf("\t-k N\tSelect the scale factor. 2, 2x3, 2x4, 3 or 4. (default 2).\n");
-	printf("\t-o\tnosse2 : disable SSE2\n");
+	printf("\t-o\tnosse2 : disable SSE2, noaltivec : disable Altivec\n");
 	printf("\nMore info at " PACKAGE_URL "\n");
 	exit(EXIT_FAILURE);
 }
@@ -339,8 +341,10 @@ int main(int argc, char* argv[])
 		case 'o' :
 			if (strcmp(optarg, "nosse2") == 0) {
 				scale_set_options(SCALE2X_OPTION_NO_SSE2);
+			} else if (strcmp(optarg, "noaltivec") == 0) {
+				scale_set_options(SCALE2X_OPTION_NO_ALTIVEC);
 			} else {
-				printf("Invalid -o option. Valid values are : nosse2.\n");
+				printf("Invalid -o option. Valid values are : nosse2, noaltivec.\n");
 				exit(EXIT_FAILURE);
 			}
 			break;

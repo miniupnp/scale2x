@@ -16,7 +16,7 @@
  */
 
 /*
- * This file contains a C and SSE2 implementation of the Scale2x effect.
+ * This file contains C, SSE2 and Altivec implementation of the Scale2x effect.
  *
  * You can find an high level description of the effect at :
  *
@@ -25,6 +25,10 @@
 
 #if HAVE_CONFIG_H
 #include <config.h>
+#endif
+
+#ifdef __ALTIVEC__
+#include <altivec.h>
 #endif
 
 #include "scale2x.h"
@@ -1143,3 +1147,402 @@ void scale2x4_32_sse2(scale2x_uint32* dst0, scale2x_uint32* dst1, scale2x_uint32
 
 #endif
 
+#ifdef __ALTIVEC__
+/*
+ * e1 = B if (B == D) && !(B == H) && !(D == F)
+ * e2 = B if (B == F) && !(B == H) && !(D == F)
+ */
+static inline void scale2x_8_altivec_border(scale2x_uint8* dst, const scale2x_uint8* src0, const scale2x_uint8* src1, const scale2x_uint8* src2, unsigned count)
+{
+	vector unsigned char B, D, E, F, H, e1, e2;
+	vector unsigned char previousE, nextE;
+	vector __bool char BDeq, BFeq, BHeq, DFeq;
+	static const vector unsigned char perm_first = {0,0,1,2,3,4,5,6,7,8,9,10,11,12,13,14};
+	static const vector unsigned char perm_last = {1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,15};
+
+	assert(count >= 32);
+	assert(count % 16 == 0);
+
+	/* first run */
+	B = *((vector unsigned char *)src0);
+	E = *((vector unsigned char *)src1);
+	H = *((vector unsigned char *)src2);
+	src0 += 16;
+	src1 += 16;
+	src2 += 16;
+	nextE = *((const vector unsigned char *)src1);
+	D = vec_perm(E, E, perm_first);
+	F = vec_perm(E, nextE, vec_lvsl(1, src1));
+
+	BDeq = vec_cmpeq(B, D);
+	BFeq = vec_cmpeq(B, F);
+	BHeq = vec_cmpeq(B, H);
+	DFeq = vec_cmpeq(D, F);
+
+	e1 = vec_sel(E, B, vec_andc(vec_andc(BDeq, BHeq), DFeq));
+	e2 = vec_sel(E, B, vec_andc(vec_andc(BFeq, BHeq), DFeq));
+
+	*((vector unsigned char *)dst) = vec_mergeh(e1, e2);
+	dst += 16;
+	*((vector unsigned char *)dst) = vec_mergel(e1, e2);
+	dst += 16;
+
+	previousE = E;
+
+	/* middle */
+	for (count -= 32; count > 0; count -= 16) {
+		B = *((vector unsigned char *)src0);
+		E = nextE;
+		H = *((vector unsigned char *)src2);
+		src0 += 16;
+		src1 += 16;
+		src2 += 16;
+		nextE = *((const vector unsigned char *)src1);
+		D = vec_perm(previousE, E, vec_lvsl(15, src1));
+		F = vec_perm(E, nextE, vec_lvsl(1, src1));
+
+		BDeq = vec_cmpeq(B, D);
+		BFeq = vec_cmpeq(B, F);
+		BHeq = vec_cmpeq(B, H);
+		DFeq = vec_cmpeq(D, F);
+
+		e1 = vec_sel(E, B, vec_andc(vec_andc(BDeq, BHeq), DFeq));
+		e2 = vec_sel(E, B, vec_andc(vec_andc(BFeq, BHeq), DFeq));
+
+		*((vector unsigned char *)dst) = vec_mergeh(e1, e2);
+		dst += 16;
+		*((vector unsigned char *)dst) = vec_mergel(e1, e2);
+		dst += 16;
+
+		previousE = E;
+	}
+
+	/* last run */
+	B = *((vector unsigned char *)src0);
+	E = nextE;
+	H = *((vector unsigned char *)src2);
+	D = vec_perm(previousE, E, vec_lvsl(15, src1));
+	F = vec_perm(E, E, perm_last);
+	src0 += 16;
+	src1 += 16;
+	src2 += 16;
+
+	BDeq = vec_cmpeq(B, D);
+	BFeq = vec_cmpeq(B, F);
+	BHeq = vec_cmpeq(B, H);
+	DFeq = vec_cmpeq(D, F);
+
+	e1 = vec_sel(E, B, vec_andc(vec_andc(BDeq, BHeq), DFeq));
+	e2 = vec_sel(E, B, vec_andc(vec_andc(BFeq, BHeq), DFeq));
+
+	*((vector unsigned char *)dst) = vec_mergeh(e1, e2);
+	dst += 16;
+	*((vector unsigned char *)dst) = vec_mergel(e1, e2);
+	dst += 16;
+}
+
+static inline void scale2x_16_altivec_border(scale2x_uint16* dst, const scale2x_uint16* src0, const scale2x_uint16* src1, const scale2x_uint16* src2, unsigned count)
+{
+	vector unsigned short B, D, E, F, H, e1, e2;
+	vector __bool short BDeq, BFeq, BHeq, DFeq;
+	static const vector unsigned char perm_first = {0,1,0,1,2,3,4,5,6,7,8,9,10,11,12,13};
+	static const vector unsigned char perm_last = {2,3,4,5,6,7,8,9,10,11,12,13,14,15,14,15};
+
+	assert(count >= 16);
+	assert(count % 8 == 0);
+
+	/* first run */
+	B = *((vector unsigned short *)src0);
+	E = *((vector unsigned short *)src1);
+	H = *((vector unsigned short *)src2);
+	D = vec_perm(E, E, perm_first);
+	F = vec_perm(E, *(((vector unsigned short *)src1)+1), vec_lvsl(2, src1));
+	src0 += 8;
+	src1 += 8;
+	src2 += 8;
+
+	BDeq = vec_cmpeq(B, D);
+	BFeq = vec_cmpeq(B, F);
+	BHeq = vec_cmpeq(B, H);
+	DFeq = vec_cmpeq(D, F);
+
+	e1 = vec_sel(E, B, vec_andc(vec_andc(BDeq, BHeq), DFeq));
+	e2 = vec_sel(E, B, vec_andc(vec_andc(BFeq, BHeq), DFeq));
+
+	*((vector unsigned short *)dst) = vec_mergeh(e1, e2);
+	dst += 8;
+	*((vector unsigned short *)dst) = vec_mergel(e1, e2);
+	dst += 8;
+
+	/* middle */
+	for (count -= 16; count > 0; count -= 8) {
+		B = *((vector unsigned short *)src0);
+		E = *((vector unsigned short *)src1);
+		H = *((vector unsigned short *)src2);
+		D = vec_perm(*(((vector unsigned short *)src1)-1), E, vec_lvsl(14, src1));
+		F = vec_perm(E, *(((vector unsigned short *)src1)+1), vec_lvsl(2, src1));
+		src0 += 8;
+		src1 += 8;
+		src2 += 8;
+
+		BDeq = vec_cmpeq(B, D);
+		BFeq = vec_cmpeq(B, F);
+		BHeq = vec_cmpeq(B, H);
+		DFeq = vec_cmpeq(D, F);
+
+		e1 = vec_sel(E, B, vec_andc(vec_andc(BDeq, BHeq), DFeq));
+		e2 = vec_sel(E, B, vec_andc(vec_andc(BFeq, BHeq), DFeq));
+
+		*((vector unsigned short *)dst) = vec_mergeh(e1, e2);
+		dst += 8;
+		*((vector unsigned short *)dst) = vec_mergel(e1, e2);
+		dst += 8;
+	}
+
+	/* last run */
+	B = *((vector unsigned short *)src0);
+	E = *((vector unsigned short *)src1);
+	H = *((vector unsigned short *)src2);
+	D = vec_perm(*(((vector unsigned short *)src1)-1), E, vec_lvsl(14, src1));
+	F = vec_perm(E, E, perm_last);
+	src0 += 8;
+	src1 += 8;
+	src2 += 8;
+
+	BDeq = vec_cmpeq(B, D);
+	BFeq = vec_cmpeq(B, F);
+	BHeq = vec_cmpeq(B, H);
+	DFeq = vec_cmpeq(D, F);
+
+	e1 = vec_sel(E, B, vec_andc(vec_andc(BDeq, BHeq), DFeq));
+	e2 = vec_sel(E, B, vec_andc(vec_andc(BFeq, BHeq), DFeq));
+
+	*((vector unsigned short *)dst) = vec_mergeh(e1, e2);
+	dst += 8;
+	*((vector unsigned short *)dst) = vec_mergel(e1, e2);
+	dst += 8;
+}
+
+static inline void scale2x_32_altivec_border(scale2x_uint32* dst, const scale2x_uint32* src0, const scale2x_uint32* src1, const scale2x_uint32* src2, unsigned count)
+{
+	vector unsigned int B, D, E, F, H, e1, e2;
+	vector __bool int BDeq, BFeq, BHeq, DFeq;
+	static const vector unsigned char perm_first = {0,1,2,3,0,1,2,3,4,5,6,7,8,9,10,11};
+	static const vector unsigned char perm_last = {4,5,6,7,8,9,10,11,12,13,14,15,12,13,14,15};
+
+	assert(count >= 8);
+	assert(count % 4 == 0);
+
+	/* first run */
+	B = *((vector unsigned int *)src0);
+	E = *((vector unsigned int *)src1);
+	H = *((vector unsigned int *)src2);
+	D = vec_perm(E, E, perm_first);
+	F = vec_perm(E, *(((vector unsigned int *)src1)+1), vec_lvsl(4, src1));
+	src0 += 4;
+	src1 += 4;
+	src2 += 4;
+
+	BDeq = vec_cmpeq(B, D);
+	BFeq = vec_cmpeq(B, F);
+	BHeq = vec_cmpeq(B, H);
+	DFeq = vec_cmpeq(D, F);
+
+	e1 = vec_sel(E, B, vec_andc(vec_andc(BDeq, BHeq), DFeq));
+	e2 = vec_sel(E, B, vec_andc(vec_andc(BFeq, BHeq), DFeq));
+
+	*((vector unsigned int *)dst) = vec_mergeh(e1, e2);
+	dst += 4;
+	*((vector unsigned int *)dst) = vec_mergel(e1, e2);
+	dst += 4;
+
+	/* middle */
+	for (count -= 8; count > 0; count -= 4) {
+		B = *((vector unsigned int *)src0);
+		E = *((vector unsigned int *)src1);
+		H = *((vector unsigned int *)src2);
+		D = vec_perm(*(((vector unsigned int *)src1)-1), E, vec_lvsl(12, src1));
+		F = vec_perm(E, *(((vector unsigned int *)src1)+1), vec_lvsl(4, src1));
+		src0 += 4;
+		src1 += 4;
+		src2 += 4;
+
+		BDeq = vec_cmpeq(B, D);
+		BFeq = vec_cmpeq(B, F);
+		BHeq = vec_cmpeq(B, H);
+		DFeq = vec_cmpeq(D, F);
+
+		e1 = vec_sel(E, B, vec_andc(vec_andc(BDeq, BHeq), DFeq));
+		e2 = vec_sel(E, B, vec_andc(vec_andc(BFeq, BHeq), DFeq));
+
+		*((vector unsigned int *)dst) = vec_mergeh(e1, e2);
+		dst += 4;
+		*((vector unsigned int *)dst) = vec_mergel(e1, e2);
+		dst += 4;
+	}
+
+	/* last run */
+	B = *((vector unsigned int *)src0);
+	E = *((vector unsigned int *)src1);
+	H = *((vector unsigned int *)src2);
+	D = vec_perm(*(((vector unsigned int *)src1)-1), E, vec_lvsl(12, src1));
+	F = vec_perm(E, E, perm_last);
+	src0 += 4;
+	src1 += 4;
+	src2 += 4;
+
+	BDeq = vec_cmpeq(B, D);
+	BFeq = vec_cmpeq(B, F);
+	BHeq = vec_cmpeq(B, H);
+	DFeq = vec_cmpeq(D, F);
+
+	e1 = vec_sel(E, B, vec_andc(vec_andc(BDeq, BHeq), DFeq));
+	e2 = vec_sel(E, B, vec_andc(vec_andc(BFeq, BHeq), DFeq));
+
+	*((vector unsigned int *)dst) = vec_mergeh(e1, e2);
+	dst += 4;
+	*((vector unsigned int *)dst) = vec_mergel(e1, e2);
+	dst += 4;
+}
+
+/**
+ * Scale by a factor of 2 a row of pixels of 8 bits.
+ * This is a very fast Altivec implementation.
+ * The implementation uses a combination of cmp/and/not operations to
+ * completly remove the need of conditional jumps. This trick give the
+ * major speed improvement.
+ * Also, using the 16 bytes Altivec registers more than one pixel are computed
+ * at the same time.
+ * The pixels over the left and right borders are assumed of the same color of
+ * the pixels on the border.
+ * Note that the implementation is optimized to write data sequentially to
+ * maximize the bandwidth on video memory.
+ * \param src0 Pointer at the first pixel of the previous row.
+ * \param src1 Pointer at the first pixel of the current row.
+ * \param src2 Pointer at the first pixel of the next row.
+ * \param count Length in pixels of the src0, src1 and src2 rows.
+ * \param dst0 First destination row, double length in pixels.
+ * \param dst1 Second destination row, double length in pixels.
+ */
+void scale2x_8_altivec(scale2x_uint8* dst0, scale2x_uint8* dst1, const scale2x_uint8* src0, const scale2x_uint8* src1, const scale2x_uint8* src2, unsigned count)
+{
+	if (count % 16 != 0 || count < 32) {
+		scale2x_8_def(dst0, dst1, src0, src1, src2, count);
+	} else {
+		scale2x_8_altivec_border(dst0, src0, src1, src2, count);
+		scale2x_8_altivec_border(dst1, src2, src1, src0, count);
+	}
+}
+
+void scale2x3_8_altivec(scale2x_uint8* dst0, scale2x_uint8* dst1, scale2x_uint8* dst2, const scale2x_uint8* src0, const scale2x_uint8* src1, const scale2x_uint8* src2, unsigned count)
+{
+	if (count % 16 != 0 || count < 32) {
+		scale2x3_8_def(dst0, dst1, dst2, src0, src1, src2, count);
+	} else {
+		scale2x_8_altivec_border(dst0, src0, src1, src2, count);
+		scale2x_8_def_center(dst1, src0, src1, src2, count);
+		scale2x_8_altivec_border(dst2, src2, src1, src0, count);
+	}
+}
+
+void scale2x4_8_altivec(scale2x_uint8* dst0, scale2x_uint8* dst1, scale2x_uint8* dst2, scale2x_uint8* dst3, const scale2x_uint8* src0, const scale2x_uint8* src1, const scale2x_uint8* src2, unsigned count)
+{
+	if (count % 16 != 0 || count < 32) {
+		scale2x4_8_def(dst0, dst1, dst2, dst3, src0, src1, src2, count);
+	} else {
+		scale2x_8_altivec_border(dst0, src0, src1, src2, count);
+		scale2x_8_def_center(dst1, src0, src1, src2, count);
+		scale2x_8_def_center(dst2, src0, src1, src2, count);
+		scale2x_8_altivec_border(dst3, src2, src1, src0, count);
+	}
+}
+
+/**
+ * Scale by a factor of 2 a row of pixels of 16 bits.
+ * This function operates like scale2x_8_altivec() but for 16 bits pixels.
+ * \param src0 Pointer at the first pixel of the previous row.
+ * \param src1 Pointer at the first pixel of the current row.
+ * \param src2 Pointer at the first pixel of the next row.
+ * \param count Length in pixels of the src0, src1 and src2 rows. It must
+ * be at least 16 and a multiple of 8.
+ * \param dst0 First destination row, double length in pixels.
+ * \param dst1 Second destination row, double length in pixels.
+ */
+void scale2x_16_altivec(scale2x_uint16* dst0, scale2x_uint16* dst1, const scale2x_uint16* src0, const scale2x_uint16* src1, const scale2x_uint16* src2, unsigned count)
+{
+	if (count % 8 != 0 || count < 16) {
+		scale2x_16_def(dst0, dst1, src0, src1, src2, count);
+	} else {
+		scale2x_16_altivec_border(dst0, src0, src1, src2, count);
+		scale2x_16_altivec_border(dst1, src2, src1, src0, count);
+	}
+}
+
+void scale2x3_16_altivec(scale2x_uint16* dst0, scale2x_uint16* dst1, scale2x_uint16* dst2, const scale2x_uint16* src0, const scale2x_uint16* src1, const scale2x_uint16* src2, unsigned count)
+{
+	if (count % 8 != 0 || count < 16) {
+		scale2x3_16_def(dst0, dst1, dst2, src0, src1, src2, count);
+	} else {
+		scale2x_16_altivec_border(dst0, src0, src1, src2, count);
+		scale2x_16_def_center(dst1, src0, src1, src2, count);
+		scale2x_16_altivec_border(dst2, src2, src1, src0, count);
+	}
+}
+
+void scale2x4_16_altivec(scale2x_uint16* dst0, scale2x_uint16* dst1, scale2x_uint16* dst2, scale2x_uint16* dst3, const scale2x_uint16* src0, const scale2x_uint16* src1, const scale2x_uint16* src2, unsigned count)
+{
+	if (count % 8 != 0 || count < 16) {
+		scale2x4_16_def(dst0, dst1, dst2, dst3, src0, src1, src2, count);
+	} else {
+		scale2x_16_altivec_border(dst0, src0, src1, src2, count);
+		scale2x_16_def_center(dst1, src0, src1, src2, count);
+		scale2x_16_def_center(dst2, src0, src1, src2, count);
+		scale2x_16_altivec_border(dst3, src2, src1, src0, count);
+	}
+}
+
+/**
+ * Scale by a factor of 2 a row of pixels of 32 bits.
+ * This function operates like scale2x_8_altivec() but for 32 bits pixels.
+ * \param src0 Pointer at the first pixel of the previous row.
+ * \param src1 Pointer at the first pixel of the current row.
+ * \param src2 Pointer at the first pixel of the next row.
+ * \param count Length in pixels of the src0, src1 and src2 rows. It must
+ * be at least 8 and a multiple of 4.
+ * \param dst0 First destination row, double length in pixels.
+ * \param dst1 Second destination row, double length in pixels.
+ */
+void scale2x_32_altivec(scale2x_uint32* dst0, scale2x_uint32* dst1, const scale2x_uint32* src0, const scale2x_uint32* src1, const scale2x_uint32* src2, unsigned count)
+{
+	if (count % 4 != 0 || count < 8) {
+		scale2x_32_def(dst0, dst1, src0, src1, src2, count);
+	} else {
+		scale2x_32_altivec_border(dst0, src0, src1, src2, count);
+		scale2x_32_altivec_border(dst1, src2, src1, src0, count);
+	}
+}
+
+void scale2x3_32_altivec(scale2x_uint32* dst0, scale2x_uint32* dst1, scale2x_uint32* dst2, const scale2x_uint32* src0, const scale2x_uint32* src1, const scale2x_uint32* src2, unsigned count)
+{
+	if (count % 4 != 0 || count < 8) {
+		scale2x3_32_def(dst0, dst1, dst2, src0, src1, src2, count);
+	} else {
+		scale2x_32_altivec_border(dst0, src0, src1, src2, count);
+		scale2x_32_def_center(dst1, src0, src1, src2, count);
+		scale2x_32_altivec_border(dst2, src2, src1, src0, count);
+	}
+}
+
+void scale2x4_32_altivec(scale2x_uint32* dst0, scale2x_uint32* dst1, scale2x_uint32* dst2, scale2x_uint32* dst3, const scale2x_uint32* src0, const scale2x_uint32* src1, const scale2x_uint32* src2, unsigned count)
+{
+	if (count % 4 != 0 || count < 8) {
+		scale2x4_32_def(dst0, dst1, dst2, dst3, src0, src1, src2, count);
+	} else {
+		scale2x_32_altivec_border(dst0, src0, src1, src2, count);
+		scale2x_32_def_center(dst1, src0, src1, src2, count);
+		scale2x_32_def_center(dst2, src0, src1, src2, count);
+		scale2x_32_altivec_border(dst3, src2, src1, src0, count);
+	}
+}
+
+#endif /* __ALTIVEC__ */
