@@ -444,6 +444,13 @@ void scale(unsigned scale, void* void_dst, unsigned dst_slice, const void* void_
 			stage_scale2x4_impl = (stage_scale2x4_t)scale2x4_8_altivec;
 		} else
 #endif
+#ifdef USE_SCALE2X_NEON
+		if (!(scale_options & SCALE2X_OPTION_NO_NEON)) {
+			stage_scale2x_impl = (stage_scale2x_t)scale2x_8_neon;
+			stage_scale2x3_impl = (stage_scale3x_t)scale2x3_8_neon;
+			stage_scale2x4_impl = (stage_scale2x4_t)scale2x4_8_neon;
+		} else
+#endif
 		{
 			stage_scale2x_impl = (stage_scale2x_t)scale2x_8_def;
 			stage_scale2x3_impl = (stage_scale3x_t)scale2x3_8_def;
@@ -466,6 +473,13 @@ void scale(unsigned scale, void* void_dst, unsigned dst_slice, const void* void_
 			stage_scale2x4_impl = (stage_scale2x4_t)scale2x4_16_altivec;
 		} else
 #endif
+#ifdef USE_SCALE2X_NEON
+		if (!(scale_options & SCALE2X_OPTION_NO_NEON)) {
+			stage_scale2x_impl = (stage_scale2x_t)scale2x_16_neon;
+			stage_scale2x3_impl = (stage_scale3x_t)scale2x3_16_neon;
+			stage_scale2x4_impl = (stage_scale2x4_t)scale2x4_16_neon;
+		} else
+#endif
 		{
 			stage_scale2x_impl = (stage_scale2x_t)scale2x_16_def;
 			stage_scale2x3_impl = (stage_scale3x_t)scale2x3_16_def;
@@ -486,6 +500,13 @@ void scale(unsigned scale, void* void_dst, unsigned dst_slice, const void* void_
 			stage_scale2x_impl = (stage_scale2x_t)scale2x_32_altivec;
 			stage_scale2x3_impl = (stage_scale3x_t)scale2x3_32_altivec;
 			stage_scale2x4_impl = (stage_scale2x4_t)scale2x4_32_altivec;
+		} else
+#endif
+#ifdef USE_SCALE2X_NEON
+		if (!(scale_options & SCALE2X_OPTION_NO_NEON)) {
+			stage_scale2x_impl = (stage_scale2x_t)scale2x_32_neon;
+			stage_scale2x3_impl = (stage_scale3x_t)scale2x3_32_neon;
+			stage_scale2x4_impl = (stage_scale2x4_t)scale2x4_32_neon;
 		} else
 #endif
 		{

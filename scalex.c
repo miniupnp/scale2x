@@ -269,8 +269,12 @@ void usage(void)
 	printf("Fast implementation of the Scale2/3/4x effects\n");
 #ifdef USE_SCALE2X_SSE2
 	printf("(using SSE2 optimization)\n");
-#elif defined(USE_SCALE2X_ALTIVEC)
+#endif
+#if defined(USE_SCALE2X_ALTIVEC)
 	printf("(using Altivec optimization)\n");
+#endif
+#ifdef USE_SCALE2X_NEON
+	printf("(using ARM NEON optimization)\n");
 #endif
 	printf("\nSyntax: scalex [-o options] [-k N] FROM.png TO.png\n");
 	printf("\nOptions:\n");
