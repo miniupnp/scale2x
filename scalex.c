@@ -279,7 +279,7 @@ void usage(void)
 	printf("\nSyntax: scalex [-o options] [-k N] FROM.png TO.png\n");
 	printf("\nOptions:\n");
 	printf("\t-k N\tSelect the scale factor. 2, 2x3, 2x4, 3 or 4. (default 2).\n");
-	printf("\t-o\tnosse2 : disable SSE2, noaltivec : disable Altivec\n");
+	printf("\t-o\tnovect : disable SIMD optimizations\n");
 	printf("\nMore info at " PACKAGE_URL "\n");
 	exit(EXIT_FAILURE);
 }
@@ -287,7 +287,7 @@ void usage(void)
 #ifdef HAVE_GETOPT_LONG
 struct option long_options[] = {
 	{ "scale", 1, 0, 'k' },
-	{ "options", 1, 0, 'o' },
+	{ "opt", 1, 0, 'o' },
 	{ "speed", 0, 0, 'T' },
 	{ "crc", 0, 0, 'c' },
 	{ "help", 0, 0, 'h' },
@@ -343,12 +343,10 @@ int main(int argc, char* argv[])
 			}
 			break;
 		case 'o' :
-			if (strcmp(optarg, "nosse2") == 0) {
-				scale_set_options(SCALE2X_OPTION_NO_SSE2);
-			} else if (strcmp(optarg, "noaltivec") == 0) {
-				scale_set_options(SCALE2X_OPTION_NO_ALTIVEC);
+			if (strcmp(optarg, "novect") == 0) {
+				scale_set_options(SCALE2X_OPTION_NO_VECT);
 			} else {
-				printf("Invalid -o option. Valid values are : nosse2, noaltivec.\n");
+				printf("Invalid -o option. Valid values are : novect.\n");
 				exit(EXIT_FAILURE);
 			}
 			break;
